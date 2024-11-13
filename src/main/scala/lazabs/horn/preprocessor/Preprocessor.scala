@@ -31,14 +31,10 @@ package lazabs.horn.preprocessor
 
 import ap.parser._
 import IExpression._
-
 import lazabs.horn.bottomup.HornClauses
-import lazabs.horn.global._
 import lazabs.horn.Util.{Dag, DagNode, DagEmpty}
 import lazabs.horn.bottomup.HornPredAbs.predArgumentSorts
-
-import scala.collection.mutable.{HashSet => MHashSet, HashMap => MHashMap,
-                                 LinkedHashSet, ArrayBuffer}
+import scala.collection.mutable.{HashSet => MHashSet, HashMap => MHashMap}
 
 object HornPreprocessor {
 
@@ -47,7 +43,6 @@ object HornPreprocessor {
   type Clauses           = Seq[HornClauses.Clause]
   type VerificationHints = lazabs.horn.abstractions.VerificationHints
 
-  import lazabs.horn.abstractions.VerificationHints._
 
   //////////////////////////////////////////////////////////////////////////////
 

@@ -1,21 +1,21 @@
 /**
  * Copyright (c) 2011-2024 Hossein Hojjat and Philipp Ruemmer.
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice, this
  *   list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of the authors nor the names of their
  *   contributors may be used to endorse or promote products derived from
  *   this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,11 +35,9 @@ import IExpression._
 import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
 import ap.types.MonoSortedPredicate
-import ap.basetypes.Tree
-
 import lazabs.GlobalParameters
 import lazabs.ParallelComputation
-import lazabs.Main.{TimeoutException, StoppedException, PrintingFinishedException}
+import lazabs.Main.PrintingFinishedException
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
 import HornPreprocessor.BackTranslator
 import lazabs.horn.bottomup._
@@ -48,18 +46,14 @@ import lazabs.horn.global._
 import lazabs.utils.Manip._
 import lazabs.prover.PrincessWrapper
 import PrincessWrapper._
-import lazabs.types.Type
 import lazabs.horn.Util._
 import lazabs.horn.predgen.Interpolators
-import lazabs.horn.abstractions.{AbsLattice, AbsReader, LoopDetector,
+import lazabs.horn.abstractions.{AbsLattice, AbsReader,
                                  StaticAbstractionBuilder, AbstractionRecord,
                                  VerificationHints, EmptyVerificationHints}
 import AbstractionRecord.AbstractionMap
-import StaticAbstractionBuilder.AbstractionType
-import lazabs.horn.concurrency.ReaderMain
 import lazabs.horn.symex.{BreadthFirstForwardSymex, DepthFirstForwardSymex, Symex}
-
-import scala.collection.mutable.{HashSet => MHashSet, HashMap => MHashMap,
+import scala.collection.mutable.{HashMap => MHashMap,
                                  LinkedHashMap}
 
 
@@ -143,7 +137,7 @@ object HornWrapper {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class HornWrapper(constraints  : Seq[HornClause], 
+class HornWrapper(constraints  : Seq[HornClause],
                   uppaalAbsMap : Option[Map[String, AbsLattice]],
                   lbe          : Boolean,
                   disjunctive  : Boolean) {
@@ -158,7 +152,7 @@ class HornWrapper(constraints  : Seq[HornClause],
 
   private val translator = new HornTranslator
   import translator._
-  
+
   //////////////////////////////////////////////////////////////////////////////
 
   GlobalParameters.get.setupApUtilDebug
@@ -285,7 +279,7 @@ class HornWrapper(constraints  : Seq[HornClause],
   def printMonolithic(converted : Seq[Clause]) : Unit =
       if (converted forall { case Clause(_, body, _) => body.size <= 1 }) {
         Console.err.println("Clauses are linear; printing monolithic form")
-        
+
         val preds =
           (for (Clause(head, body, _) <- converted.iterator;
                 IAtom(p, _) <- (Iterator single head) ++ body.iterator)
@@ -301,7 +295,7 @@ class HornWrapper(constraints  : Seq[HornClause],
                        yield new ConstantTerm("post" + i)
 
         val initClause = {
-          val constraint = 
+          val constraint =
             or(for (Clause(IAtom(pred, args), List(), constraint) <-
                       converted.iterator;
                     if (pred != FALSE))
@@ -314,9 +308,9 @@ class HornWrapper(constraints  : Seq[HornClause],
         if (converted exists { case Clause(IAtom(FALSE, _), List(), _) => true
                                case _ => false })
           Console.err.println("WARNING: ignoring clauses without relation symbols")
-          
+
         val transitionClause = {
-          val constraint = 
+          val constraint =
             or(for (Clause(IAtom(predH, argsH),
                            List(IAtom(predB, argsB)), constraint) <-
                       converted.iterator;
@@ -330,7 +324,7 @@ class HornWrapper(constraints  : Seq[HornClause],
         }
 
         val assertionClause = {
-          val constraint = 
+          val constraint =
             or(for (Clause(IAtom(FALSE, _),
                            List(IAtom(predB, argsB)), constraint) <-
                       converted.iterator)
@@ -584,7 +578,7 @@ class CEGARHornWrapper(unsimplifiedClauses   : Seq[Clause],
 
         r
       }
-        
+
       case Right(cex) => {
         if (GlobalParameters.get.simplifiedCEX) {
           println
@@ -652,7 +646,7 @@ class SymexHornWrapper(unsimplifiedClauses   : Seq[Clause],
 
         Left(solFun _)
       }
-        
+
       case Right(cex) => {
         if (GlobalParameters.get.simplifiedCEX) {
           println
@@ -679,7 +673,7 @@ class SymexHornWrapper(unsimplifiedClauses   : Seq[Clause],
 ////////////////////////////////////////////////////////////////////////////////
 
 class HornTranslator {
-  
+
   val predicates = MHashMap[String,Literal]().empty
   def getPrincessPredLiteral(r: HornLiteral): Literal = r match {
     case RelVar(varName, params) =>
@@ -696,12 +690,12 @@ class HornTranslator {
       case _ =>
         throw new Exception("Invalid relation symbol")
   }
-  
+
   def global2bup (h: HornClause): ConstraintClause = new IConstraintClause {
     import lazabs.ast.ASTree._
 
     val head = h.head match {
-      case Interp(BoolConst(false)) => 
+      case Interp(BoolConst(false)) =>
         new Literal {
           val predicate = lazabs.horn.bottomup.HornClauses.FALSE
           val relevantArguments = List()
@@ -714,17 +708,17 @@ class HornTranslator {
       case _ => List()
     }
     val bodyRelVars = (for(rv@RelVar(_,_) <- h.body) yield rv)
-    
+
     val body = bodyRelVars.map(getPrincessPredLiteral(_))
-    
+
     val freeVariables = {
       val free = Set[String]() ++ (for(Interp(f@_) <- h.body) yield f).map(freeVars(_)).flatten.map(_.name)
       val bound = Set[String]() ++ headParams.map(_.name) ++ bodyRelVars.map(_.params.map(_.name)).flatten
       free.filterNot(bound.contains(_))
     }
-    
-    val localVariableNum = freeVariables.size     
-       
+
+    val localVariableNum = freeVariables.size
+
     def iInstantiateConstraint(headArguments : Seq[ConstantTerm],
                                  bodyArguments: Seq[Seq[ConstantTerm]],
                                  localVariables : Seq[ConstantTerm]) : IFormula = {
@@ -732,7 +726,7 @@ class HornTranslator {
       //println("This is the clause: " + lazabs.viewer.HornPrinter.printDebug(h))
       //println("This is the head arguments: " + headArguments + " and the body arguments: " + bodyArguments + " and the local arguments: " + localVariables)
 
-      val symbolMap: LinkedHashMap[String,ConstantTerm] = LinkedHashMap[String,ConstantTerm]() ++ 
+      val symbolMap: LinkedHashMap[String,ConstantTerm] = LinkedHashMap[String,ConstantTerm]() ++
         (
           headParams.map(_.name).zip(headArguments) ++
           (bodyRelVars.zip(bodyArguments).map(x => x._1.params.map(_.name).zip(x._2)).flatten.toMap) ++
@@ -750,7 +744,7 @@ class HornTranslator {
     var varMap = Map[ConstantTerm,String]().empty
     var xcl = 0
     var x = 0
-    
+
     def getVar(ct : ConstantTerm) = {
       varMap get ct match {
         case Some(n) => n
@@ -769,7 +763,7 @@ class HornTranslator {
         case _ =>
           RelVar(
             a.pred.name,
-            (for (p <- a.args) yield 
+            (for (p <- a.args) yield
                 lazabs.ast.ASTree.Parameter(
                     getVar(p.asInstanceOf[IConstant].c),
                     lazabs.types.IntegerType()
@@ -787,10 +781,10 @@ class HornTranslator {
       val body_constr = (for (a <- clNorm.body) yield atom(a))
       HornClause(atom(clNorm.head), body_atoms :: body_constr)
     }
-    
+
     constraints map (horn2Eldarica(_))
   }
-  
+
     val predPool = new MHashMap[(String,Int), Predicate]
 
     def relVar2Atom(rv : RelVar,
@@ -845,5 +839,5 @@ class HornTranslator {
       Clause(headAtom,relVarAtoms,
              and(interpFormulas map (PrincessWrapper expr2Formula _)))
     }
-  
+
 }
