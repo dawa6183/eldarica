@@ -122,15 +122,6 @@ class BreadthFirstForwardSymex[CC](clauses  : Iterable[CC],
 
   }
 
-  override def handleForwardSubsumption(nucleus:   NormClause,
-                                        electrons: Seq[UnitClause]): Unit = {}
-
-  override def handleBackwardSubsumption(subsumed: Set[UnitClause]): Unit = {
-    // todo: future work
-  }
-
-  override def handleFalseConstraint(nucleus:   NormClause,
-                                     electrons: Seq[UnitClause]): Unit = {}
 
   def solve(): Either[Solution, Dag[(IAtom, CC)]] = {
     var result: Either[Solution, Dag[(IAtom, CC)]] = null
@@ -154,27 +145,12 @@ class BreadthFirstForwardSymex[CC](clauses  : Iterable[CC],
           if (hasContradiction(newElectron, proverStatus)) { // false :- true
             unitClauseDB.add(newElectron, (nucleus, electrons))
             result = Right(buildCounterExample(newElectron))
-          } else if (constraintIsFalse(newElectron, proverStatus)) {
-            printInfo("")
-            handleFalseConstraint(nucleus, electrons)
-          } else if (checkForwardSubsumption(newElectron, unitClauseDB)) {
-            printInfo("subsumed by existing unit clauses.")
-            handleForwardSubsumption(nucleus, electrons)
           } else {
-            val backSubsumed =
-              checkBackwardSubsumption(newElectron, unitClauseDB)
-            if (backSubsumed nonEmpty) {
-              printInfo(
-                "subsumes " + backSubsumed.size + " existing unit clause(s)_...",
-                newLine = false)
-              handleBackwardSubsumption(backSubsumed)
-            }
             if (unitClauseDB.add(newElectron, (nucleus, electrons))) {
               printInfo("\n  (Added to database.)\n")
               handleNewUnitClause(newElectron)
             } else {
               printInfo("\n  (Derived clause already exists in the database.)")
-              handleForwardSubsumption(nucleus, electrons)
             }
           }
         }

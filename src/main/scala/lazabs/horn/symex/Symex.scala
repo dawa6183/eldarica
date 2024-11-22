@@ -211,14 +211,14 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
 
   // methods handling derivation of useless clauses (merge?)
   def handleForwardSubsumption(nucleus:   NormClause,
-                               electrons: Seq[UnitClause]): Unit
+                               electrons: Seq[UnitClause]): Unit = {}
 
-  def handleBackwardSubsumption(subsumed: Set[UnitClause]): Unit
+  def handleBackwardSubsumption(subsumed: Set[UnitClause]): Unit = {}
 
-  def handleNewUnitClause(clause: UnitClause): Unit
+  def handleNewUnitClause(clause: UnitClause): Unit = {}
 
   def handleFalseConstraint(nucleus:   NormClause,
-                            electrons: Seq[UnitClause]): Unit
+                            electrons: Seq[UnitClause]): Unit = {}
 
   protected def buildSolution(): Solution = {
     for ((pred, rs) <- relationSymbols if pred != HornClauses.FALSE)

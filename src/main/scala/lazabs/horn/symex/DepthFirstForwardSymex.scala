@@ -33,7 +33,6 @@ import lazabs.horn.Util.Dag
 import lazabs.horn.bottomup.HornClauses.ConstraintClause
 import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
-
 import scala.annotation.tailrec
 import scala.collection.mutable.{HashSet => MHashSet, Queue => MQueue, Stack => MStack}
 
@@ -115,13 +114,8 @@ class DepthFirstForwardSymex[CC](clauses: Iterable[CC])(
     backtrack()
   }
 
-  override def handleBackwardSubsumption(subsumed: Set[UnitClause]): Unit = {
-    //
-  }
-
   override def handleFalseConstraint(nucleus:   NormClause,
                                      electrons: Seq[UnitClause]): Unit = {
-
     backtrack()
   }
 
@@ -160,14 +154,6 @@ class DepthFirstForwardSymex[CC](clauses: Iterable[CC])(
             printInfo("subsumed by existing unit clauses.")
             handleForwardSubsumption(nucleus, electrons)
           } else {
-            val backSubsumed =
-              checkBackwardSubsumption(newElectron, unitClauseDB)
-            if (backSubsumed nonEmpty) {
-              printInfo(
-                "subsumes " + backSubsumed.size + " existing unit clause(s)_...",
-                newLine = false)
-              handleBackwardSubsumption(backSubsumed)
-            }
             if (unitClauseDB.add(newElectron, (nucleus, electrons))) {
               printInfo("\n  (Added to database.)\n")
               handleNewUnitClause(newElectron)
