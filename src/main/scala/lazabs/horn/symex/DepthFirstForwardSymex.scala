@@ -28,11 +28,14 @@
  */
 package lazabs.horn.symex
 
+import ap.parser.IAtom
+import lazabs.horn.Util.Dag
 import lazabs.horn.bottomup.HornClauses.ConstraintClause
-import lazabs.horn.bottomup.NormClause
+import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
+import lazabs.horn.preprocessor.HornPreprocessor.Solution
 
 import scala.annotation.tailrec
-import scala.collection.mutable.{Queue => MQueue, Stack => MStack}
+import scala.collection.mutable.{HashSet => MHashSet, Queue => MQueue, Stack => MStack}
 
 /**
  * Implements a depth-first forward symbolic execution using Symex.
@@ -128,4 +131,92 @@ class DepthFirstForwardSymex[CC](clauses: Iterable[CC])(
     while (choicesStack.nonEmpty && choicesStack.top.isEmpty) choicesStack.pop()
   }
 
+  def solve(): Either[Solution, Dag[(IAtom, CC)]] = {
+    var result: Either[Solution, Dag[(IAtom, CC)]] = null
+
+    val touched = new MHashSet[NormClause]
+    facts.foreach(fact => touched += factToNormClause(fact))
+
+    // start traversal
+    var ind = 0
+    while (result == null) {
+      lazabs.GlobalParameters.get.timeoutChecker()
+      ind += 1
+      printInfo(ind + ".", false)
+      getClausesForResolution match {
+        case Some((nucleus, electrons)) => {
+          touched += nucleus
+          val newElectron = hyperResolve(nucleus, electrons)
+          printInfo("\t" + nucleus + "\n  +\n\t" + electrons.mkString("\n\t"))
+          printInfo("  =\n\t" + newElectron)
+          val proverStatus = checkFeasibility(newElectron.constraint)
+          if (hasContradiction(newElectron, proverStatus)) { // false :- true
+            unitClauseDB.add(newElectron, (nucleus, electrons))
+            result = Right(buildCounterExample(newElectron))
+          } else if (constraintIsFalse(newElectron, proverStatus)) {
+            printInfo("")
+            handleFalseConstraint(nucleus, electrons)
+          } else if (checkForwardSubsumption(newElectron, unitClauseDB)) {
+            printInfo("subsumed by existing unit clauses.")
+            handleForwardSubsumption(nucleus, electrons)
+          } else {
+            val backSubsumed =
+              checkBackwardSubsumption(newElectron, unitClauseDB)
+            if (backSubsumed nonEmpty) {
+              printInfo(
+                "subsumes " + backSubsumed.size + " existing unit clause(s)_...",
+                newLine = false)
+              handleBackwardSubsumption(backSubsumed)
+            }
+            if (unitClauseDB.add(newElectron, (nucleus, electrons))) {
+              printInfo("\n  (Added to database.)\n")
+              handleNewUnitClause(newElectron)
+            } else {
+              printInfo("\n  (Derived clause already exists in the database.)")
+              handleForwardSubsumption(nucleus, electrons)
+            }
+          }
+        }
+        case None => // nothing left to explore, the clauses are SAT.
+          printInfo("\t(Search space exhausted.)\n")
+
+          // Untouched clauses can be either those which were unreachable,
+          // or corner cases such as a single assertion which did not need
+          // symbolic execution.
+          // The only case we need to handle is assertions without body literals,
+          // because assertions with uninterpreted body literals are always
+          // solvable by interpreting the body literals as false.
+
+          val untouchedClauses =
+            (normClauses.map(_._1).toSet -- touched).filter(_.body.isEmpty)
+          assert(untouchedClauses.forall(clause =>
+            clause.head._1.pred == HornClauses.FALSE))
+          if (untouchedClauses nonEmpty) {
+            printInfo("\t(Dangling assertions detected, checking those too.)")
+            for (clause <- untouchedClauses if result == null) {
+              val cuc = // for the purpose of checking feasibility
+                if (clause.body.isEmpty) {
+                  new UnitClause(RelationSymbol(HornClauses.FALSE),
+                    clause.constraint,
+                    false)
+                } else toUnitClause(clause)
+              unitClauseDB.add(cuc, (clause, Nil))
+              if (hasContradiction(cuc, checkFeasibility(cuc.constraint))) {
+                result = Right(buildCounterExample(cuc))
+              }
+            }
+            if (result == null) { // none of the assertions failed, so this is SAT
+              result = Left(buildSolution())
+            }
+          } else {
+            result = Left(buildSolution())
+
+          }
+        case other =>
+          throw new SymexException(
+            "Cannot hyper-resolve clauses: " + other.toString)
+      }
+    }
+    result
+  }
 }

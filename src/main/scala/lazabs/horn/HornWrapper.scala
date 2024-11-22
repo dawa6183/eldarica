@@ -39,7 +39,7 @@ import lazabs.GlobalParameters
 import lazabs.ParallelComputation
 import lazabs.Main.PrintingFinishedException
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
-import HornPreprocessor.BackTranslator
+import HornPreprocessor.{BackTranslator, Solution}
 import lazabs.horn.bottomup._
 import lazabs.horn.bottomup.HornClauses._
 import lazabs.horn.global._
@@ -48,13 +48,10 @@ import lazabs.prover.PrincessWrapper
 import PrincessWrapper._
 import lazabs.horn.Util._
 import lazabs.horn.predgen.Interpolators
-import lazabs.horn.abstractions.{AbsLattice, AbsReader,
-                                 StaticAbstractionBuilder, AbstractionRecord,
-                                 VerificationHints, EmptyVerificationHints}
+import lazabs.horn.abstractions.{AbsLattice, AbsReader, AbstractionRecord, EmptyVerificationHints, StaticAbstractionBuilder, VerificationHints}
 import AbstractionRecord.AbstractionMap
 import lazabs.horn.symex.{BreadthFirstForwardSymex, DepthFirstForwardSymex, Symex}
-import scala.collection.mutable.{HashMap => MHashMap,
-                                 LinkedHashMap}
+import scala.collection.mutable.{LinkedHashMap, HashMap => MHashMap}
 
 
 object HornWrapper {
@@ -604,6 +601,11 @@ class CEGARHornWrapper(unsimplifiedClauses   : Seq[Clause],
 
 ////////////////////////////////////////////////////////////////////////////////
 
+sealed trait Result
+case class Sat(model: Solution) extends Result
+case class Unsat(cex: Dag[IAtom]) extends Result
+case object Unknown extends Result
+
 class SymexHornWrapper(unsimplifiedClauses   : Seq[Clause],
                        preprocBackTranslator : BackTranslator,
                        outStream             : java.io.OutputStream,
@@ -639,7 +641,7 @@ class SymexHornWrapper(unsimplifiedClauses   : Seq[Clause],
               HornWrapper.verifySolution(fullSol, unsimplifiedClauses)
               fullSol
             } else {
-              // only keep relation symbols that were also part of the orginal problem
+              // only keep relation symbols that were also part of the original problem
               res filterKeys allPredicates(unsimplifiedClauses)
             }
           }
