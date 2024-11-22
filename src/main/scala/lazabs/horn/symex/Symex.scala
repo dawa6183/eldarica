@@ -322,7 +322,7 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
   // true if cuc = "FALSE :- c" and c is satisfiable, false otherwise.
   protected def hasContradiction(cuc:          UnitClause,
                                proverStatus: ProverStatus.Value): Boolean = {
-    ((cuc.rs.pred == HornClauses.FALSE) || (!cuc.isPositive)) &&
+    ((cuc.rs.pred == HornClauses.FALSE) || (!cuc.isPositive && cuc.rs.pred == HornClauses.FALSE)) &&
     (proverStatus match { // check if cuc constraint is satisfiable
       case ProverStatus.Valid | ProverStatus.Sat     => true
       case ProverStatus.Invalid | ProverStatus.Unsat => false
