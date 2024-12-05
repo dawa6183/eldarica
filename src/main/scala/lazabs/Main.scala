@@ -30,21 +30,13 @@
 
 package lazabs
 
-import java.io.{InputStream, FileNotFoundException, Reader, FileReader, BufferedReader, File}
-import parser._
-import lazabs.art._
+import java.io.{FileNotFoundException, Reader, FileReader, BufferedReader, File}
 import lazabs.art.SearchMethod._
 import lazabs.prover._
 import lazabs.viewer._
-import lazabs.utils.Inline._
-//import lazabs.utils.PointerAnalysis
-//import lazabs.cfg.MakeCFG
 import lazabs.nts._
-import lazabs.horn.parser.HornReader
-import lazabs.horn.abstractions.AbsLattice
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
 import lazabs.horn.concurrency.CCReader
-
 import ap.util.Debug
 
 object GlobalParameters {
@@ -60,7 +52,7 @@ object GlobalParameters {
   }
 
   object SymexEngine extends Enumeration {
-    val BreadthFirstForward, DepthFirstForward, None = Value
+    val BreadthFirstForward, BreadthFirstBackward, ConcreteForward, DepthFirstForward, None = Value
   }
 
   val parameters =
@@ -352,6 +344,8 @@ object Main {
           symexEngine = symexOpt.drop("-sym:".length) match {
             case "dfs" => GlobalParameters.SymexEngine.DepthFirstForward
             case "bfs" => GlobalParameters.SymexEngine.BreadthFirstForward
+            case "bfsb" => GlobalParameters.SymexEngine.BreadthFirstBackward
+            case "con" => GlobalParameters.SymexEngine.ConcreteForward
             case _ =>
               println("Unknown argument for -sym:, defaulting to bfs.")
               GlobalParameters.SymexEngine.BreadthFirstForward

@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2022-2024 Zafer Esen, Philipp Ruemmer, Daniel Wallgren. All rights
+ * reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -29,103 +30,86 @@
 package lazabs.horn.symex
 
 import ap.parser.IAtom
-import lazabs.horn.Util.Dag
+import lazabs.horn.Util.{Dag, DagEmpty}
 import lazabs.horn.bottomup.HornClauses.ConstraintClause
 import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
-import scala.annotation.tailrec
-import scala.collection.mutable.{HashSet => MHashSet, Queue => MQueue, Stack => MStack}
+import lazabs.horn.symex.Symex.SymexException
+
+import scala.collection.mutable.{HashSet => MHashSet, Queue => MQueue}
 
 /**
- * Implements a depth-first forward symbolic execution using Symex.
+ * Implements a breadth-first forward symbolic execution using Symex.
+ * @param maxDepth : Search will stop after deriving this many unit clauses
+ *                   for a given predicate. Note that setting this value to
+ *                   something other than None will yield an under-approximate
+ *                   solution but will always terminate (like BMC).
  */
-class DepthFirstForwardSymex[CC](clauses: Iterable[CC])(
-    implicit clause2ConstraintClause:     CC => ConstraintClause)
+class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
+                                    maxDepth : Option[Int] = None)(
+    implicit clause2ConstraintClause:       CC => ConstraintClause)
     extends Symex(clauses)
     with SimpleSubsumptionChecker
     with ConstraintSimplifierUsingConjunctEliminator {
 
-  import Symex._
+  printInfo("Starting breadth-first backward symbolic execution (BFS)...\n")
 
-  printInfo("Starting depth-first forward symbolic execution (DFS)...\n")
+  // Explore the state graph (the derived unit clauses) breadth-first. At
+  // each depth there can be multiple choices for execution from a state
+  // (the clauses to resolve with). Hence, we have a queue of states to resolve
+  // with, and for each state a queue of branches to explore.
+  private val choicesQueue = new MQueue[(NormClause, Seq[UnitClause])]
 
-  // Keeps track of the remaining branches.
-  private val choicesStack = new MStack[MQueue[NormClause]]
   /*
-   * Initialize the search by adding the facts. Each fact corresponds to a source
-   * in the search DAG.
+   * Initialize the search by adding the facts (the initial states).
+   * Each fact corresponds to a source in the search DAG.
    */
   for (fact <- facts) {
-    unitClauseDB.push() // we push regardless if there is a choice or not
-    unitClauseDB add (fact, parents = (factToNormClause(fact), Nil)) // add each fact to the stack
-    val possibleChoices = clausesWithRelationInBody(fact.rs)
-    val choiceQueue     = new MQueue[NormClause]
-    choiceQueue.enqueue(possibleChoices: _*)
-    choicesStack push choiceQueue
+    printInfo("Adding fact to unit database")
+    printInfo(fact.toString())
+    unitClauseDB add (fact, parents = (factToNormClause(fact), Nil))
   }
 
-  @tailrec final override def getClausesForResolution
+  for (goal <- goals) {
+    printInfo("Adding goal to unit database")
+    printInfo(goal.toString())
+    unitClauseDB add (goal, parents = (goalToNormClause(goal), Nil))
+    handleNewUnitClause(goal)
+  }
+
+  final override def getClausesForResolution
     : Option[(NormClause, Seq[UnitClause])] = {
-    if (unitClauseDB isEmpty) { // the search space is exhausted
+    /*
+     * The unitClauseDB is empty if the set of Horn clauses to solve doesn't have any facts
+     * The choicesQueue can become empty when the search space has been exhausted
+     */
+    if (unitClauseDB.isEmpty || choicesQueue.isEmpty) {
       None
-    } else {
-      val electron = unitClauseDB.last // use last cuc to enforce depth-first exploration
-      if (choicesStack isEmpty) {
-        None
-      } else {
-        val possibleChoices = choicesStack.top
-        possibleChoices.length match {
-          case 0 => // no more resolution options for this cuc, backtrack
-            backtrack()
-            //choicesStack.pop()
-            //unitClauseDB.pop()
-            getClausesForResolution
-          case n =>
-            if (n > 1)
-              unitClauseDB.push()
-            val choice = possibleChoices.dequeue
-            Some((choice, Seq(electron)))
-        }
+    }
+    else {
+      maxDepth match {
+        case None =>
+          Some(choicesQueue.dequeue)
+        case Some(depth) =>
+          var res : Option[(NormClause, Seq[UnitClause])] = None
+          var continue = true
+          do {
+            val candidate = choicesQueue.dequeue()
+            val rs        = candidate._1.head._1
+            unitClauseDB.inferred(rs) match {
+              case Some(cucs) if cucs.length >= depth => ()
+              // this is not a good candidate, continue
+              case _ => // this is a good candidate, return
+                continue = false
+                res = Some(candidate)
+            }
+          } while (choicesQueue.nonEmpty && continue)
+          res
       }
     }
   }
 
-  override def handleNewUnitClause(clause: UnitClause): Unit = {
-    val possibleChoices = clausesWithRelationInBody(clause.rs)
-    // "possible", because clauses might be nonlinear and we might not have all needed electrons in the DB.
-
-    if (possibleChoices.exists(clause => clause.body.length > 1))
-      ??? // todo: support nonlinear clauses, assuming they do not exist for now :-)
-
-    possibleChoices.length match {
-      case 0 =>
-        println(
-          "Warning: new unit clause has no clauses to resolve against " + clause)
-      case _ => // a decision point
-        val choiceQueue = new MQueue[NormClause]
-        choiceQueue.enqueue(possibleChoices: _*)
-        choicesStack push choiceQueue
-    }
-  }
-
-  override def handleForwardSubsumption(nucleus:   NormClause,
-                                        electrons: Seq[UnitClause]): Unit = {
-    printInfo("  (DFS: handling forward subsumption.)\n")
-    backtrack()
-  }
-
-  override def handleFalseConstraint(nucleus:   NormClause,
-                                     electrons: Seq[UnitClause]): Unit = {
-    backtrack()
-  }
-
-  private def backtrack(): Unit = {
-    printInfo("  (DFS: backtracking.)\n")
-    unitClauseDB.pop()
-    while (choicesStack.nonEmpty && choicesStack.top.isEmpty) choicesStack.pop()
-  }
-
-  override def solve(): Either[Solution, Dag[(IAtom, CC)]] = {
+  def solve(): Either[Solution, Dag[(IAtom, CC)]] = {
     var result: Either[Solution, Dag[(IAtom, CC)]] = null
 
     val touched = new MHashSet[NormClause]
@@ -146,20 +130,13 @@ class DepthFirstForwardSymex[CC](clauses: Iterable[CC])(
           val proverStatus = checkFeasibility(newElectron.constraint)
           if (hasContradiction(newElectron, proverStatus)) { // false :- true
             unitClauseDB.add(newElectron, (nucleus, electrons))
-            result = Right(buildCounterExample(newElectron))
-          } else if (constraintIsFalse(newElectron, proverStatus)) {
-            printInfo("")
-            handleFalseConstraint(nucleus, electrons)
-          } else if (checkForwardSubsumption(newElectron, unitClauseDB)) {
-            printInfo("subsumed by existing unit clauses.")
-            handleForwardSubsumption(nucleus, electrons)
+            result = Right(DagEmpty)
           } else {
             if (unitClauseDB.add(newElectron, (nucleus, electrons))) {
               printInfo("\n  (Added to database.)\n")
               handleNewUnitClause(newElectron)
             } else {
               printInfo("\n  (Derived clause already exists in the database.)")
-              handleForwardSubsumption(nucleus, electrons)
             }
           }
         }
@@ -204,5 +181,17 @@ class DepthFirstForwardSymex[CC](clauses: Iterable[CC])(
       }
     }
     result
+  }
+
+  override def handleNewUnitClause(electron: UnitClause): Unit = {
+    printInfo("In handleNewUnitClause\n")
+
+    val possibleChoices = clausesWithRelationInHead(electron.rs)
+
+    // for each possible choice, fix electron.rs, and resolve against
+    // all previous derivations of other body literals
+    for (nucleus <- possibleChoices) {
+      choicesQueue enqueue ((nucleus, Seq(electron)))
+    }
   }
 }

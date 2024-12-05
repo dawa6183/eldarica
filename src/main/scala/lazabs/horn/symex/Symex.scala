@@ -38,7 +38,7 @@ import ap.terfor.conjunctions.Conjunction
 import ap.terfor.substitutions.ConstantSubst
 import ap.theories.{Theory, TheoryCollector}
 import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
-import lazabs.horn.bottomup.HornClauses.ConstraintClause
+import lazabs.horn.bottomup.HornClauses.{ConstraintClause, FALSE}
 import lazabs.horn.Util.{Dag, DagEmpty, DagNode}
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
 
@@ -172,37 +172,86 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
   protected def hyperResolve(nucleus:   NormClause,
                            electrons: Seq[UnitClause]): UnitClause = {
 
-    assert(electrons.length == nucleus.body.length)
+
+    if (electrons.length == 1 && !electrons.head.isPositive) {
+      negativeResolve(nucleus, electrons)
+    } else {
+      assert(electrons.length == nucleus.body.length)
+      
+      val constraintFromElectrons =
+        for (((rp, occ), ind) <- nucleus.body.zipWithIndex) yield {
+          assert(rp == electrons(ind).rs)
+          // todo: review if we need something like below
+          //if ((electrons(ind)
+          //      .constraintAtOcc(occ)
+          //      .constants intersect nucleus.head._1.arguments.head.toSet) nonEmpty)
+          //  electrons(ind).constraintAtOcc(occ + 1)
+          //else
+          electrons(ind).constraintAtOcc(occ)
+        }
+
+      val unsimplifiedConstraint =
+        Conjunction.conj(constraintFromElectrons ++ Seq(nucleus.constraint),
+          symex_sf.order)
+
+      val localSymbols =
+        (unsimplifiedConstraint.constants -- nucleus.headSyms)
+          .map(_.asInstanceOf[Term])
+
+      val simplifiedConstraint =
+        simplifyConstraint(unsimplifiedConstraint,
+          localSymbols,
+          reduceBeforeSimplification = true)
+
+      newUnitClause(rs = nucleus.head._1,
+        constraint = simplifiedConstraint,
+        isPositive = true,
+        headOccInConstraint = nucleus.head._2)
+    }
+
+  }
+
+
+  /**
+   * Applies hyper-resolution using nucleus and electrons and returns the
+   * resulting negative unit clause.
+   * @note This implementation only infers positive CUCs and linear negative clauses.
+   * @note "FALSE :- constraint" is considered a unit clause.
+   */
+  private def negativeResolve(nucleus:   NormClause,
+                              electrons: Seq[UnitClause]): UnitClause = {
+
+    // todo: Should maybe add some more checks for negative resolution
+    assert(electrons.length == nucleus.body.length || (electrons.length == 1 && !electrons.head.isPositive))
+
+    // Make sure we match the same symbol
+    assert(nucleus.head._1 == electrons.head.rs)
 
     val constraintFromElectrons =
-      for (((rp, occ), ind) <- nucleus.body.zipWithIndex) yield {
-        assert(rp == electrons(ind).rs)
-        // todo: review if we need something like below
-        //if ((electrons(ind)
-        //      .constraintAtOcc(occ)
-        //      .constants intersect nucleus.head._1.arguments.head.toSet) nonEmpty)
-        //  electrons(ind).constraintAtOcc(occ + 1)
-        //else
-        electrons(ind).constraintAtOcc(occ)
-      }
+      Seq(electrons.head.constraintAtOcc(nucleus.head._2))
 
     val unsimplifiedConstraint =
       Conjunction.conj(constraintFromElectrons ++ Seq(nucleus.constraint),
-                       symex_sf.order)
+        symex_sf.order)
 
+    // todo: This is not correct, the symbol could probably still be in the body
     val localSymbols =
-      (unsimplifiedConstraint.constants -- nucleus.headSyms)
-        .map(_.asInstanceOf[Term])
+      nucleus.headSyms.toSet
+        .map({s: ConstantTerm => s.asInstanceOf[Term]})
 
     val simplifiedConstraint =
       simplifyConstraint(unsimplifiedConstraint,
-                         localSymbols,
-                         reduceBeforeSimplification = true)
+        localSymbols,
+        reduceBeforeSimplification = true)
 
-    newUnitClause(rs = nucleus.head._1,
-                  constraint = simplifiedConstraint,
-                  isPositive = true,
-                  headOccInConstraint = nucleus.head._2)
+    val rs = if (nucleus.body == Nil) {RelationSymbol(FALSE)} else nucleus.body.head._1
+
+    // todo: if the constraint is false the isPositive should be true for toString to work better
+    // todo: is this always zero occ ? probably not
+    newUnitClause(rs = rs,
+      constraint = simplifiedConstraint,
+      isPositive = false,
+      headOccInConstraint = 0)
   }
 
   val unitClauseDB = new UnitClauseDB(relationSymbols.values.toSet)

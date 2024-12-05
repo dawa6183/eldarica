@@ -50,7 +50,8 @@ import lazabs.horn.Util._
 import lazabs.horn.predgen.Interpolators
 import lazabs.horn.abstractions.{AbsLattice, AbsReader, AbstractionRecord, EmptyVerificationHints, StaticAbstractionBuilder, VerificationHints}
 import AbstractionRecord.AbstractionMap
-import lazabs.horn.symex.{BreadthFirstForwardSymex, DepthFirstForwardSymex, Symex}
+import lazabs.horn.symex.{BreadthFirstBackwardSymex, BreadthFirstForwardSymex, ConcreteForwardSymex, DepthFirstForwardSymex, Symex}
+
 import scala.collection.mutable.{LinkedHashMap, HashMap => MHashMap}
 
 
@@ -354,6 +355,10 @@ class HornWrapper(constraints  : Seq[HornClause],
         Some(new DepthFirstForwardSymex[Clause](clauses)) // todo: add depth
       case GlobalParameters.SymexEngine.BreadthFirstForward =>
         Some(new BreadthFirstForwardSymex[Clause](clauses, symexDepth))
+      case GlobalParameters.SymexEngine.ConcreteForward =>
+        Some(new ConcreteForwardSymex[Clause](clauses, symexDepth))
+      case GlobalParameters.SymexEngine.BreadthFirstBackward =>
+        Some(new BreadthFirstBackwardSymex[Clause](clauses, symexDepth))
       case GlobalParameters.SymexEngine.None                => None
     }
   }
