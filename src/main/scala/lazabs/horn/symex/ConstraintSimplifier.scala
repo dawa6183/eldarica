@@ -81,7 +81,7 @@ trait ConstraintSimplifierUsingConjunctEliminator extends ConstraintSimplifier {
       else constraint
 
     if (constraint.negatedConjs.isEmpty ||
-      constraint.negatedConjs.forall(x => x.quans.isEmpty || x.quans.head != ap.terfor.conjunctions.Quantifier.ALL)) {
+      constraint.negatedConjs.forall(x => x.quans.length == 1 && x.quans.head == ap.terfor.conjunctions.Quantifier.EX)) {
       /**
        * If the constraint is a conjunction, we can use the
        * [[ConjunctEliminator]] class for simplification.
