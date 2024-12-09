@@ -269,20 +269,37 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
   def handleFalseConstraint(nucleus:   NormClause,
                             electrons: Seq[UnitClause]): Unit = {}
 
-  protected def buildSolution(): Solution = {
+  protected def buildSolution(positiveCucs: Boolean = true): Solution = {
     for ((pred, rs) <- relationSymbols if pred != HornClauses.FALSE)
       yield {
         val predCucs = unitClauseDB.inferred(rs).getOrElse(Nil)
-        val predDisj =
-          Conjunction.disj(predCucs.map(_.constraint), symex_sf.order)
 
-        val constants = (predDisj.constants -- rs.arguments(0)).toSeq
-        val predSolution = symex_sf.reducer(Conjunction.TRUE)(
-          Conjunction.quantify(ap.terfor.conjunctions.Quantifier.EX,
-                               symex_sf.order.sort(constants),
-                               predDisj,
-                               symex_sf.order)
-        )
+
+        val predSolution = if (positiveCucs) {
+          val predDisj =
+            Conjunction.conj(predCucs.map(_.constraint), symex_sf.order)
+
+          val constants = (predDisj.constants -- rs.arguments(0)).toSeq
+
+          symex_sf.reducer(Conjunction.TRUE)(
+            Conjunction.quantify(ap.terfor.conjunctions.Quantifier.EX,
+              symex_sf.order.sort(constants),
+              predDisj,
+              symex_sf.order)
+          )
+        } else {
+          val predConj =
+            Conjunction.conj(predCucs.filter(x => !x.isPositive).map(_.constraint.negate), symex_sf.order)
+
+          val constants = (predConj.constants -- rs.arguments(0)).toSeq
+
+          symex_sf.reducer(Conjunction.TRUE)(
+            Conjunction.quantify(ap.terfor.conjunctions.Quantifier.ALL,
+              symex_sf.order.sort(constants),
+              predConj,
+              symex_sf.order)
+          )
+        }
 
         val argSubst: Map[ConstantTerm, ITerm] =
           (for ((arg, i) <- rs.arguments(0) zipWithIndex)

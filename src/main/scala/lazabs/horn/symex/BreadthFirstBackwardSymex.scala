@@ -169,10 +169,10 @@ class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
               }
             }
             if (result == null) { // none of the assertions failed, so this is SAT
-              result = Left(buildSolution())
+              result = Left(buildSolution(false))
             }
           } else {
-            result = Left(buildSolution())
+            result = Left(buildSolution(false))
 
           }
         case other =>
