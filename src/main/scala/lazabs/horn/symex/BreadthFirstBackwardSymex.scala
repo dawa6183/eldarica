@@ -30,7 +30,7 @@
 package lazabs.horn.symex
 
 import ap.parser.IAtom
-import lazabs.horn.Util.{Dag, DagEmpty}
+import lazabs.horn.Util.Dag
 import lazabs.horn.bottomup.HornClauses.ConstraintClause
 import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
@@ -130,7 +130,7 @@ class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
           val proverStatus = checkFeasibility(newElectron.constraint)
           if (hasContradiction(newElectron, proverStatus)) { // false :- true
             unitClauseDB.add(newElectron, (nucleus, electrons))
-            result = Right(DagEmpty)
+            result = Right(buildCounterExample(newElectron, backward = true))
           } else {
             if (unitClauseDB.add(newElectron, (nucleus, electrons))) {
               printInfo("\n  (Added to database.)\n")
@@ -165,7 +165,7 @@ class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
                 } else toUnitClause(clause)
               unitClauseDB.add(cuc, (clause, Nil))
               if (hasContradiction(cuc, checkFeasibility(cuc.constraint))) {
-                result = Right(buildCounterExample(cuc))
+                result = Right(buildCounterExample(cuc, backward = true))
               }
             }
             if (result == null) { // none of the assertions failed, so this is SAT

@@ -41,8 +41,8 @@ import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
 import lazabs.horn.bottomup.HornClauses.{ConstraintClause, FALSE}
 import lazabs.horn.Util.{Dag, DagEmpty, DagNode}
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
-
-import collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
+import collection.mutable.{HashMap => MHashMap}
+import scala.annotation.tailrec
 
 object Symex {
   class SymexException(msg: String) extends Exception(msg)
@@ -322,60 +322,114 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
     prover.shutDown
   }
 
-  /**
-   * Returns a counterexample DAG given the last derived unit clause as root,
-   * i.e., FALSE :- TRUE.
-   */
-  protected def buildCounterExample(root: UnitClause): Dag[(IAtom, CC)] = {
-    def computeAtoms(headAtom: IAtom, cuc: UnitClause): Dag[(IAtom, CC)] = {
+
+  private def buildCounterExampleBackwardLinear(root: UnitClause): Dag[(IAtom, CC)] = {
+    @tailrec
+    def computeAtoms(groundLiteralAtom: IAtom, cuc: UnitClause, next: Dag[(IAtom, CC)]): Dag[(IAtom, CC)] = {
       unitClauseDB.parentsOption(cuc) match {
         case None =>
-          DagEmpty
+          assert(assertion = false, "this should be unreachable")
+          next
         case Some((nucleus, electrons)) =>
-          // try to get ground literals for parent electrons
           import prover._
-          val childrenAtoms = scope {
+          val parentAtom = scope {
             !!(asIFormula(nucleus.constraint))
-            !!(headAtom.args === nucleus.headSyms)
-            for ((electron, occ) <- electrons zip nucleus.body.map(_._2))
-              !!(asIFormula(electron.constraintAtOcc(occ)))
+
+            if (electrons.nonEmpty) {
+              !!(asIFormula(electrons.head.constraintAtOcc(nucleus.head._2)))
+
+              if (nucleus.body.nonEmpty) {
+                !!(groundLiteralAtom.args === nucleus.bodySyms.head)
+              }
+            }
+
             val pRes = ???
             assert(pRes == ProverStatus.Sat)
+
             withCompleteModel { comp =>
-              for ((rs, occ) <- nucleus.body)
-                yield
-                  IAtom(rs.pred,
-                        rs.arguments(occ).map(arg => comp.evalToTerm(arg)))
+              IAtom(nucleus.head._1.pred, nucleus.headSyms.map(arg => comp.evalToTerm(arg)))
             }
           }
-          val subDags: Seq[Dag[(IAtom, CC)]] = {
-            for ((electron, atom) <- electrons zip childrenAtoms)
-              yield computeAtoms(atom, electron)
+
+          val newNext: DagNode[(IAtom, CC)] = if (next.isEmpty) {
+            DagNode((parentAtom, normClauseToCC(nucleus)), List(), next)
+          } else {
+            DagNode((parentAtom, normClauseToCC(nucleus)), List(1), next)
           }
 
-          val nextDag: Dag[(IAtom, CC)] =
-            if (subDags isEmpty) DagEmpty
-            else {
-              var next: Dag[(IAtom, CC)] = DagEmpty
-              for (subDag <- subDags.reverse if !subDag.isEmpty) {
-                next = DagNode(subDag.head, Nil, next)
-              }
-              next
-            }
-
-          val dummyChildren = electrons.indices.map(_ + 1).toList
-          val dag: Dag[(IAtom, CC)] =
-            DagNode((headAtom, normClauseToCC(nucleus)), dummyChildren, nextDag)
-          val resDag = dag
-            .substitute((dummyChildren zip subDags).toMap)
-            .elimUnconnectedNodes
-            .collapseNodes
-          resDag
-        // substitute the subdags into the dag
-        // todo: review, this seems to be inefficient?
+          if (electrons.nonEmpty) {
+            computeAtoms(parentAtom, electrons.head, newNext)
+          } else {
+            // We have reached the root node
+            // FALSE :- P(x_1, x_2, ..)
+            DagNode((parentAtom, normClauseToCC(nucleus)), List(1), next)
+          }
       }
     }
-    computeAtoms(IAtom(HornClauses.FALSE, Nil), root)
+
+    computeAtoms(IAtom(HornClauses.FALSE, Nil), root, DagEmpty)
+  }
+
+
+  /**
+   * Returns a counterexample DAG given the last derived unit clause as root,
+   * i.e., FALSE :- TRUE.  Dag[(IAtom, CC)]
+   */
+  protected def buildCounterExample(root: UnitClause, backward: Boolean = false): Dag[(IAtom, CC)] = {
+    if (backward) {
+      buildCounterExampleBackwardLinear(root)
+    } else {
+      def computeAtoms(headAtom: IAtom, cuc: UnitClause): Dag[(IAtom, CC)] = {
+        unitClauseDB.parentsOption(cuc) match {
+          case None =>
+            DagEmpty
+          case Some((nucleus, electrons)) =>
+            // try to get ground literals for parent electrons
+            import prover._
+            val childrenAtoms = scope {
+              !!(asIFormula(nucleus.constraint))
+              !!(headAtom.args === nucleus.headSyms)
+              for ((electron, occ) <- electrons zip nucleus.body.map(_._2))
+                !!(asIFormula(electron.constraintAtOcc(occ)))
+              val pRes = ???
+              assert(pRes == ProverStatus.Sat)
+              withCompleteModel { comp =>
+                for ((rs, occ) <- nucleus.body)
+                  yield
+                    IAtom(rs.pred,
+                      rs.arguments(occ).map(arg => comp.evalToTerm(arg)))
+              }
+            }
+            val subDags: Seq[Dag[(IAtom, CC)]] = {
+              for ((electron, atom) <- electrons zip childrenAtoms)
+                yield computeAtoms(atom, electron)
+            }
+
+            val nextDag: Dag[(IAtom, CC)] =
+              if (subDags isEmpty) DagEmpty
+              else {
+                var next: Dag[(IAtom, CC)] = DagEmpty
+                for (subDag <- subDags.reverse if !subDag.isEmpty) {
+                  next = DagNode(subDag.head, Nil, next)
+                }
+                next
+              }
+
+            val dummyChildren = electrons.indices.map(_ + 1).toList
+            val dag: Dag[(IAtom, CC)] =
+              DagNode((headAtom, normClauseToCC(nucleus)), dummyChildren, nextDag)
+            val resDag = dag
+              .substitute((dummyChildren zip subDags).toMap)
+              .elimUnconnectedNodes
+              .collapseNodes
+            resDag
+          // substitute the subdags into the dag
+          // todo: review, this seems to be inefficient?
+        }
+      }
+
+      computeAtoms(IAtom(HornClauses.FALSE, Nil), root)
+    }
   }
 
   protected def checkFeasibility(constraint: Conjunction): ProverStatus.Value = {
