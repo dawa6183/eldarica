@@ -326,44 +326,39 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
   private def buildCounterExampleBackwardLinear(root: UnitClause): Dag[(IAtom, CC)] = {
     @tailrec
     def computeAtoms(groundLiteralAtom: IAtom, cuc: UnitClause, next: Dag[(IAtom, CC)]): Dag[(IAtom, CC)] = {
-      unitClauseDB.parentsOption(cuc) match {
-        case None =>
-          assert(assertion = false, "this should be unreachable")
-          next
-        case Some((nucleus, electrons)) =>
-          import prover._
-          val parentAtom = scope {
-            !!(asIFormula(nucleus.constraint))
+      val Some((nucleus, electrons)) = unitClauseDB.parentsOption(cuc)
+      import prover._
+      val parentAtom = scope {
+        !!(asIFormula(nucleus.constraint))
 
-            if (electrons.nonEmpty) {
-              !!(asIFormula(electrons.head.constraintAtOcc(nucleus.head._2)))
+        if (electrons.nonEmpty) {
+          !!(asIFormula(electrons.head.constraintAtOcc(nucleus.head._2)))
 
-              if (nucleus.body.nonEmpty) {
-                !!(groundLiteralAtom.args === nucleus.bodySyms.head)
-              }
-            }
-
-            val pRes = ???
-            assert(pRes == ProverStatus.Sat)
-
-            withCompleteModel { comp =>
-              IAtom(nucleus.head._1.pred, nucleus.headSyms.map(arg => comp.evalToTerm(arg)))
-            }
+          if (nucleus.body.nonEmpty) {
+            !!(groundLiteralAtom.args === nucleus.bodySyms.head)
           }
+        }
 
-          val newNext: DagNode[(IAtom, CC)] = if (next.isEmpty) {
-            DagNode((parentAtom, normClauseToCC(nucleus)), List(), next)
-          } else {
-            DagNode((parentAtom, normClauseToCC(nucleus)), List(1), next)
-          }
+        val pRes = ???
+        assert(pRes == ProverStatus.Sat)
 
-          if (electrons.nonEmpty) {
-            computeAtoms(parentAtom, electrons.head, newNext)
-          } else {
-            // We have reached the root node
-            // FALSE :- P(x_1, x_2, ..)
-            DagNode((parentAtom, normClauseToCC(nucleus)), List(1), next)
-          }
+        withCompleteModel { comp =>
+          IAtom(nucleus.head._1.pred, nucleus.headSyms.map(arg => comp.evalToTerm(arg)))
+        }
+      }
+
+      val newNext: DagNode[(IAtom, CC)] = if (next.isEmpty) {
+        DagNode((parentAtom, normClauseToCC(nucleus)), List(), next)
+      } else {
+        DagNode((parentAtom, normClauseToCC(nucleus)), List(1), next)
+      }
+
+      if (electrons.nonEmpty) {
+        computeAtoms(parentAtom, electrons.head, newNext)
+      } else {
+        // We have reached the root node
+        // FALSE :- P(x_1, x_2, ..)
+        DagNode((parentAtom, normClauseToCC(nucleus)), List(1), next)
       }
     }
 
