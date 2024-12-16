@@ -166,38 +166,7 @@ class DepthFirstForwardSymex[CC](clauses: Iterable[CC])(
         case None => // nothing left to explore, the clauses are SAT.
           printInfo("\t(Search space exhausted.)\n")
 
-          // Untouched clauses can be either those which were unreachable,
-          // or corner cases such as a single assertion which did not need
-          // symbolic execution.
-          // The only case we need to handle is assertions without body literals,
-          // because assertions with uninterpreted body literals are always
-          // solvable by interpreting the body literals as false.
-
-          val untouchedClauses =
-            (normClauses.map(_._1).toSet -- touched).filter(_.body.isEmpty)
-          assert(untouchedClauses.forall(clause =>
-            clause.head._1.pred == HornClauses.FALSE))
-          if (untouchedClauses nonEmpty) {
-            printInfo("\t(Dangling assertions detected, checking those too.)")
-            for (clause <- untouchedClauses if result == null) {
-              val cuc = // for the purpose of checking feasibility
-                if (clause.body.isEmpty) {
-                  new UnitClause(RelationSymbol(HornClauses.FALSE),
-                    clause.constraint,
-                    false)
-                } else toUnitClause(clause)
-              unitClauseDB.add(cuc, (clause, Nil))
-              if (hasContradiction(cuc, checkFeasibility(cuc.constraint))) {
-                result = Right(buildCounterExample(cuc))
-              }
-            }
-            if (result == null) { // none of the assertions failed, so this is SAT
-              result = Left(buildSolution())
-            }
-          } else {
-            result = Left(buildSolution())
-
-          }
+          result = checkUntouchedClauses(touched)
         case other =>
           throw new SymexException(
             "Cannot hyper-resolve clauses: " + other.toString)

@@ -130,7 +130,7 @@ class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
           val proverStatus = checkFeasibility(newElectron.constraint)
           if (hasContradiction(newElectron, proverStatus)) { // false :- true
             unitClauseDB.add(newElectron, (nucleus, electrons))
-            result = Right(buildCounterExample(newElectron, backward = true))
+            result = Right(buildCounterExample(newElectron, forward = false))
           } else {
             if (unitClauseDB.add(newElectron, (nucleus, electrons))) {
               printInfo("\n  (Added to database.)\n")
@@ -143,38 +143,7 @@ class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
         case None => // nothing left to explore, the clauses are SAT.
           printInfo("\t(Search space exhausted.)\n")
 
-          // Untouched clauses can be either those which were unreachable,
-          // or corner cases such as a single assertion which did not need
-          // symbolic execution.
-          // The only case we need to handle is assertions without body literals,
-          // because assertions with uninterpreted body literals are always
-          // solvable by interpreting the body literals as false.
-
-          val untouchedClauses =
-            (normClauses.map(_._1).toSet -- touched).filter(_.body.isEmpty)
-          assert(untouchedClauses.forall(clause =>
-            clause.head._1.pred == HornClauses.FALSE))
-          if (untouchedClauses nonEmpty) {
-            printInfo("\t(Dangling assertions detected, checking those too.)")
-            for (clause <- untouchedClauses if result == null) {
-              val cuc = // for the purpose of checking feasibility
-                if (clause.body.isEmpty) {
-                  new UnitClause(RelationSymbol(HornClauses.FALSE),
-                    clause.constraint,
-                    false)
-                } else toUnitClause(clause)
-              unitClauseDB.add(cuc, (clause, Nil))
-              if (hasContradiction(cuc, checkFeasibility(cuc.constraint))) {
-                result = Right(buildCounterExample(cuc, backward = true))
-              }
-            }
-            if (result == null) { // none of the assertions failed, so this is SAT
-              result = Left(buildSolution(false))
-            }
-          } else {
-            result = Left(buildSolution(false))
-
-          }
+          result = checkUntouchedClauses(touched, forward = false)
         case other =>
           throw new SymexException(
             "Cannot hyper-resolve clauses: " + other.toString)

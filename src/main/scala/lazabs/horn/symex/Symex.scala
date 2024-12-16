@@ -41,7 +41,8 @@ import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
 import lazabs.horn.bottomup.HornClauses.{ConstraintClause, FALSE}
 import lazabs.horn.Util.{Dag, DagEmpty, DagNode}
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
-import collection.mutable.{HashMap => MHashMap}
+
+import collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
 import scala.annotation.tailrec
 
 object Symex {
@@ -370,8 +371,8 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
    * Returns a counterexample DAG given the last derived unit clause as root,
    * i.e., FALSE :- TRUE.  Dag[(IAtom, CC)]
    */
-  protected def buildCounterExample(root: UnitClause, backward: Boolean = false): Dag[(IAtom, CC)] = {
-    if (backward) {
+  protected def buildCounterExample(root: UnitClause, forward: Boolean = true): Dag[(IAtom, CC)] = {
+    if (!forward) {
       buildCounterExampleBackwardLinear(root)
     } else {
       def computeAtoms(headAtom: IAtom, cuc: UnitClause): Dag[(IAtom, CC)] = {
@@ -449,6 +450,43 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
         true
       }
     })
+  }
+
+  def checkUntouchedClauses(touched: MHashSet[NormClause], forward: Boolean = true): Either[Solution, Dag[(IAtom, CC)]] = {
+    // Untouched clauses can be either those which were unreachable,
+    // or corner cases such as a single assertion which did not need
+    // symbolic execution.
+    // The only case we need to handle is assertions without body literals,
+    // because assertions with uninterpreted body literals are always
+    // solvable by interpreting the body literals as false.
+
+    var result: Either[Solution, Dag[(IAtom, CC)]] = null
+
+    val untouchedClauses =
+      (normClauses.map(_._1).toSet -- touched).filter(_.body.isEmpty)
+    assert(untouchedClauses.forall(clause =>
+      clause.head._1.pred == HornClauses.FALSE))
+    if (untouchedClauses nonEmpty) {
+      printInfo("\t(Dangling assertions detected, checking those too.)")
+      for (clause <- untouchedClauses if result == null) {
+        val cuc = // for the purpose of checking feasibility
+          if (clause.body.isEmpty) {
+            new UnitClause(RelationSymbol(HornClauses.FALSE),
+              clause.constraint,
+              false)
+          } else toUnitClause(clause)
+        unitClauseDB.add(cuc, (clause, Nil))
+        if (hasContradiction(cuc, checkFeasibility(cuc.constraint))) {
+          result = Right(buildCounterExample(cuc, forward))
+        }
+      }
+      if (result == null) { // none of the assertions failed, so this is SAT
+        result = Left(buildSolution(false))
+      }
+    } else {
+      result = Left(buildSolution(false))
+    }
+    result
   }
 
   protected def constraintIsFalse(cuc:          UnitClause,
