@@ -481,10 +481,10 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
         }
       }
       if (result == null) { // none of the assertions failed, so this is SAT
-        result = Left(buildSolution(false))
+        result = Left(buildSolution(forward))
       }
     } else {
-      result = Left(buildSolution(false))
+      result = Left(buildSolution(forward))
     }
     result
   }
