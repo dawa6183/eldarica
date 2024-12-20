@@ -278,7 +278,7 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
 
         val predSolution = if (positiveCucs) {
           val predDisj =
-            Conjunction.conj(predCucs.map(_.constraint), symex_sf.order)
+            Conjunction.disj(predCucs.map(_.constraint), symex_sf.order)
 
           val constants = (predDisj.constants -- rs.arguments(0)).toSeq
 
