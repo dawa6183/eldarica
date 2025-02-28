@@ -32,10 +32,9 @@ package lazabs.horn.symex
 import ap.parser.IAtom
 import lazabs.horn.Util.Dag
 import lazabs.horn.bottomup.HornClauses.ConstraintClause
-import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
+import lazabs.horn.bottomup.NormClause
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
 import lazabs.horn.symex.Symex.SymexException
-
 import scala.collection.mutable.{HashSet => MHashSet, Queue => MQueue}
 
 /**
@@ -97,8 +96,8 @@ class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
             val candidate = choicesQueue.dequeue()
             val rs        = candidate._1.head._1
             unitClauseDB.inferred(rs) match {
-              case Some(cucs) if cucs.length >= depth => ()
-              // this is not a good candidate, continue
+              case Some(cucs) if cucs.length >= depth =>
+                () // this is not a good candidate, continue
               case _ => // this is a good candidate, return
                 continue = false
                 res = Some(candidate)

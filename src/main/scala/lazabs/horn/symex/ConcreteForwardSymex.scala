@@ -29,12 +29,11 @@
  */
 package lazabs.horn.symex
 
-import ap.basetypes.IdealInt
-import ap.parser.{IAtom, IConstant, IIntLit, ITerm}
+import ap.parser.{IAtom, IConstant, ITerm}
 import ap.terfor.ConstantTerm
 import lazabs.horn.Util.{Dag, DagEmpty}
 import lazabs.horn.bottomup.HornClauses.ConstraintClause
-import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
+import lazabs.horn.bottomup.NormClause
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
 import lazabs.horn.symex.Symex.SymexException
 

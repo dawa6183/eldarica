@@ -41,7 +41,6 @@ import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
 import lazabs.horn.bottomup.HornClauses.{ConstraintClause, FALSE}
 import lazabs.horn.Util.{Dag, DagEmpty, DagNode}
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
-
 import collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
 import scala.annotation.tailrec
 
@@ -53,8 +52,6 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
     implicit clause2ConstraintClause: CC => ConstraintClause
 ) extends SubsumptionChecker
     with ConstraintSimplifier {
-
-  import Symex._
 
 
   var printInfo = false
@@ -209,7 +206,6 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
         isPositive = true,
         headOccInConstraint = nucleus.head._2)
     }
-
   }
 
 
