@@ -108,7 +108,7 @@ class UnitClauseDB(preds: Set[RelationSymbol]) {
     val frameInfo = frameStack.pop()
     val dropCount = cucs.size - frameInfo.numCUCs
     cucs = cucs.dropRight(dropCount)
-    //cucParents = cucParents.dropRight(dropCount)
+    cucParents = cucParents.dropRight(dropCount)
     //inferredCUCsForPred.foreach {
     //  case (pred, inferredCucs) =>
     //    val oldSize = frameInfo.numInferredCUCsForPred(pred)
