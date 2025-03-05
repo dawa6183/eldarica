@@ -241,7 +241,7 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
         localSymbols,
         reduceBeforeSimplification = true)
 
-    val rs = if (nucleus.body == Nil) {RelationSymbol(FALSE)} else nucleus.body.head._1
+    val rs = if (nucleus.body == Nil || simplifiedConstraint.isFalse) {RelationSymbol(FALSE)} else nucleus.body.head._1
 
     // todo: if the constraint is false the isPositive should be true for toString to work better
     // todo: is this always zero occ ? probably not
