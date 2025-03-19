@@ -286,7 +286,7 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
           )
         } else {
           val predConj =
-            Conjunction.conj(predCucs.filter(x => !x.isPositive).map(_.constraint.negate), symex_sf.order)
+            Conjunction.conj(predCucs.map(_.constraint.negate), symex_sf.order)
 
           val constants = (predConj.constants -- rs.arguments(0)).toSeq
 

@@ -59,16 +59,6 @@ class BreadthFirstBackwardSymex[CC](clauses  : Iterable[CC],
   // with, and for each state a queue of branches to explore.
   private val choicesQueue = new MQueue[(NormClause, Seq[UnitClause])]
 
-  /*
-   * Initialize the search by adding the facts (the initial states).
-   * Each fact corresponds to a source in the search DAG.
-   */
-  for (fact <- facts) {
-    printInfo("Adding fact to unit database")
-    printInfo(fact.toString())
-    unitClauseDB add (fact, parents = (factToNormClause(fact), Nil))
-  }
-
   for (goal <- goals) {
     printInfo("Adding goal to unit database")
     printInfo(goal.toString())
