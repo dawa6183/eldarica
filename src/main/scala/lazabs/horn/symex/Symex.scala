@@ -266,13 +266,16 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
   def handleFalseConstraint(nucleus:   NormClause,
                             electrons: Seq[UnitClause]): Unit = {}
 
-  protected def buildSolution(positiveCucs: Boolean = true): Solution = {
+  /**
+   * @note This implementation assumes that the unitClauseDB does not contain a mix of positive and
+   *       negative unit clauses
+   */
+  protected def buildSolution(): Solution = {
     for ((pred, rs) <- relationSymbols if pred != HornClauses.FALSE)
       yield {
         val predCucs = unitClauseDB.inferred(rs).getOrElse(Nil)
 
-
-        val predSolution = if (positiveCucs) {
+        val predSolution = if (unitClauseDB.nonEmpty && unitClauseDB.head.isPositive) {
           val predDisj =
             Conjunction.disj(predCucs.map(_.constraint), symex_sf.order)
 
@@ -477,10 +480,10 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
         }
       }
       if (result == null) { // none of the assertions failed, so this is SAT
-        result = Left(buildSolution(forward))
+        result = Left(buildSolution())
       }
     } else {
-      result = Left(buildSolution(forward))
+      result = Left(buildSolution())
     }
     result
   }
