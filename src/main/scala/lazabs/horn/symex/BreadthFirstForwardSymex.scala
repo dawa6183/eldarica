@@ -32,7 +32,7 @@ import ap.parser.IAtom
 import ap.util.Combinatorics
 import lazabs.horn.Util.Dag
 import lazabs.horn.bottomup.HornClauses.ConstraintClause
-import lazabs.horn.bottomup.{HornClauses, NormClause, RelationSymbol}
+import lazabs.horn.bottomup.NormClause
 import lazabs.horn.preprocessor.HornPreprocessor.Solution
 
 import scala.collection.mutable.{HashSet => MHashSet, Queue => MQueue}
@@ -76,7 +76,7 @@ class BreadthFirstForwardSymex[CC](clauses  : Iterable[CC],
 
   final override def getClausesForResolution
     : Option[(NormClause, Seq[UnitClause])] = {
-    if (unitClauseDB.isEmpty || choicesQueue.isEmpty)
+    if (choicesQueue.isEmpty)
       None
     else {
       maxDepth match {

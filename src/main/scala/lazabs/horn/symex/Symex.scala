@@ -438,17 +438,7 @@ abstract class Symex[CC](iClauses:    Iterable[CC])(
   protected def hasContradiction(cuc:          UnitClause,
                                proverStatus: ProverStatus.Value): Boolean = {
     ((cuc.rs.pred == HornClauses.FALSE) || (!cuc.isPositive && cuc.rs.pred == HornClauses.FALSE)) &&
-    (proverStatus match { // check if cuc constraint is satisfiable
-      case ProverStatus.Valid | ProverStatus.Sat     => true
-      case ProverStatus.Invalid | ProverStatus.Unsat => false
-      case s => {
-        Console.err.println(
-          "Constraint could not be checked during symbolic execution")
-        Console.err.println(cuc)
-        Console.err.println("Checker said: " + s)
-        true
-      }
-    })
+      !constraintIsFalse(cuc,proverStatus)
   }
 
   def checkUntouchedClauses(touched: MHashSet[NormClause], forward: Boolean = true): Either[Solution, Dag[(IAtom, CC)]] = {
